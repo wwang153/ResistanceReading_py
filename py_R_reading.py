@@ -39,7 +39,8 @@ USE_USB_RES = args.res == "usb"
 
 N_ARDUINO = args.arduino_sensors
 
-CSV_FILENAME = args.filename
+# CSV_FILENAME = args.filename
+CSV_FILENAME = os.path.join('data', args.filename)
 LOG_RATE_HZ = 10
 
 # ============================================================
@@ -204,7 +205,7 @@ def usb_resistance_thread():
 def csv_logger():
     file_exists = os.path.isfile(CSV_FILENAME)
 
-    start_time = time.perf_counter()  # ← reference time (t = 0)
+    start_time = time.perf_counter()  # t = 0 reference
 
     with open(CSV_FILENAME, "a", newline="") as f:
         writer = csv.writer(f)
@@ -212,36 +213,57 @@ def csv_logger():
         if not file_exists:
             header = ["time_sec", "encoder"]
             for i in range(N_ARDUINO):
-                header.append(f"arduino_R{i+1}")
+                header.append(f"arduino_f{i+1}")
             header.append("usb_resistance")
             writer.writerow(header)
 
-        print(f"Logging → {CSV_FILENAME}")
-        print(f"Resistance mode → {args.res}")
-        print(f"Arduino sensors → {N_ARDUINO}")
-        print("Time starts at 0 seconds")
+        print("\n================= LOGGING STARTED =================")
+        print(f"File: {CSV_FILENAME}")
+        print(f"Resistance mode: {args.res}")
+        print(f"Arduino sensors: {N_ARDUINO}")
+        print("Time resolution: 0.1 s")
+        print("===================================================\n")
 
         while True:
             time.sleep(1.0 / LOG_RATE_HZ)
 
-            # elapsed_time = time.perf_counter() - start_time
+            # --- time with 0.1 s accuracy ---
             elapsed_time = round(time.perf_counter() - start_time, 1)
 
-
             with data_lock:
-                row = [elapsed_time, latest_encoder]
-
-                if USE_ARDUINO_RES:
-                    row.extend(latest_arduino_resistance)
-                else:
-                    row.extend([math.nan] * N_ARDUINO)
-
-                row.append(
-                    latest_usb_resistance if USE_USB_RES else math.nan
+                arduino_vals = (
+                    latest_arduino_resistance if USE_ARDUINO_RES
+                    else [math.nan] * N_ARDUINO
                 )
 
+                usb_val = latest_usb_resistance if USE_USB_RES else math.nan
+                encoder_val = latest_encoder
+
+                row = [
+                    elapsed_time,
+                    encoder_val,
+                    *arduino_vals,
+                    usb_val
+                ]
+
+            # --- write CSV ---
             writer.writerow(row)
             f.flush()
+
+            # --- terminal output ---
+            arduino_str = (
+                "[" + ", ".join(f"{v:.3f}" for v in arduino_vals) + "]"
+                if USE_ARDUINO_RES else "disabled"
+            )
+
+            usb_str = f"{usb_val:.3f}" if USE_USB_RES else "disabled"
+
+            print(
+                f"t={elapsed_time:>4.1f} | "
+                f"enc={encoder_val:.4f} | "
+                f"A={arduino_str} | "
+                f"USB={usb_str}"
+            )
 
 # ============================================================
 # MAIN
