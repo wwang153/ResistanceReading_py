@@ -9,12 +9,12 @@ All data is written to CSV with **time starting at 0 seconds**.
 ## Features
 
 - Encoder reading via Arduino on CTR platform (serial)
-- Resistance sensors connected to Arduino (multiple channels)
-- Optional USB resistance meter
+- Resistance sensors connected to Arduino reading by ADS1220
+- Optional USB resistance meter (Hioki IM3536 LCR meter)
 - Time starts at **0 seconds** when logging begins
 - Always records the **newest available data**
-- CSV output with column headers
-- No ROS dependency
+- Sampling Rate: **10 Hz**, adjustable by `LOG_RATE_HZ = 10
+`
 
 ---
 
@@ -29,7 +29,7 @@ All data is written to CSV with **time starting at 0 seconds**.
 
 ## How to Run it?
 ```bash
-python3 record_sensors.py <fileName.csv> --res <arduino|usb|none> --arduino_sensors <sensor_number>
+python3 py_R_reading.py <fileName.csv> --res <arduino|usb|none> --arduino_sensors <sensor_number>
 ```
 
 ## Example Output Format with 3 arduino sensors
