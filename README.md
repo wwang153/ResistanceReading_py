@@ -29,7 +29,7 @@ All data is written to CSV with **time starting at 0 seconds**.
 
 ## How to Run it?
 ```bash
-python record_sensors.py <fileName.csv> --res <arduino|usb|none> --arduino_sensors <sensor_number>
+python3 record_sensors.py <fileName.csv> --res <arduino|usb|none> --arduino_sensors <sensor_number>
 ```
 
 ## Example Output Format with 3 arduino sensors
