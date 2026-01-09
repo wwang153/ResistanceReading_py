@@ -1,0 +1,108 @@
+#include <ADS1220_WE.h>
+#include <SPI.h>
+
+/* ------------------- ADS1220 Pins ------------------- */
+#define ADS1220_CS_PIN     10
+#define ADS1220_DRDY_PIN    9
+
+ADS1220_WE ads(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
+
+/* ------------------- MUX Pins (CD74HC4067) ------------------- */
+#define MUX_S0 2
+#define MUX_S1 3
+#define MUX_S2 4
+#define MUX_S3 5
+
+#define NUM_SENSORS 2   // <-- USER SETS THIS (1–16)
+
+
+/* Select MUX channel 0–15 */
+void selectMux(uint8_t ch) {
+  digitalWrite(MUX_S0, (ch & 0x01) ? HIGH : LOW);
+  digitalWrite(MUX_S1, (ch & 0x02) ? HIGH : LOW);
+  digitalWrite(MUX_S2, (ch & 0x04) ? HIGH : LOW);
+  digitalWrite(MUX_S3, (ch & 0x08) ? HIGH : LOW);
+}
+
+float convertReadingtoResistance(float reading) {
+  float V_ex = 5.0;
+  float R = 1000.;
+  float TrimPot = 2.8;
+
+  float Tuned = R + TrimPot;
+  float V_bridge = reading / 1000.;
+
+  float R_x =  - R * (V_bridge * (R + Tuned) + R * V_ex) / (V_bridge * (R + Tuned) - R * V_ex);
+  R_x += TrimPot;
+
+  return abs(R_x - 1000);
+
+}
+
+/* ------------------- Setup ------------------- */
+void setup() {
+  Serial.begin(9600);
+  delay(200);
+
+  /* MUX pins */
+  pinMode(MUX_S0, OUTPUT);
+  pinMode(MUX_S1, OUTPUT);
+  pinMode(MUX_S2, OUTPUT);
+  pinMode(MUX_S3, OUTPUT);
+
+  /* Init SPI + ADS1220 */
+  SPI.begin();
+  if(!ads.init()){
+    Serial.println("ADS1220 is not connected!");
+    while(1);
+  }
+
+  // ads.bypassPGA(false);                      // disable PGA for safety  
+  /* ADS1220 configuration */
+ 
+  ads.setCompareChannels(ADS1220_MUX_1_2);
+  ads.setVRefSource(ADS1220_VREF_REFP1_REFN1);
+  ads.setVRefValue_V(5.0);
+  ads.setGain(ADS1220_GAIN_8);              // gain = 1
+  ads.setDataRate(ADS1220_DR_LVL_5);        // ~90 SPS
+  ads.setOperatingMode(ADS1220_TURBO_MODE);
+  ads.setConversionMode(ADS1220_CONTINUOUS);
+  ads.setFIRFilter(ADS1220_NONE);
+ 
+
+  Serial.println("ADS1220 initialized.");
+
+  delay(1000);
+  
+  // selectMux(0);
+  // delay(100);
+  
+}
+
+/* ------------------- Main Loop ------------------- */
+void loop() {
+
+  for (uint8_t i = 0; i < NUM_SENSORS; i++) {
+
+    /* ---------- Select MUX channel ---------- */
+    selectMux(i);
+    delay(25);   // allow MUX + ADC to settle
+
+    /* ---------- Read voltage ---------- */
+    float mv = ads.getVoltage_mV();
+
+    /* ---------- Convert to resistance ---------- */
+    float R = convertReadingtoResistance(mv);
+
+    /* ---------- Serial output ---------- */
+    Serial.print(R, 5);
+
+    if (i < NUM_SENSORS - 1) {
+      Serial.print(",");   // comma between values
+    }
+  }
+
+  Serial.println();   // end of line
+
+}
+
