@@ -41,7 +41,7 @@ N_ARDUINO = args.arduino_sensors
 
 # CSV_FILENAME = args.filename
 CSV_FILENAME = os.path.join('data', args.filename)
-LOG_RATE_HZ = 10
+LOG_RATE_HZ = 100
 
 # ============================================================
 # SERIAL CONFIGURATION
@@ -228,7 +228,7 @@ def csv_logger():
             time.sleep(1.0 / LOG_RATE_HZ)
 
             # --- time with 0.1 s accuracy ---
-            elapsed_time = round(time.perf_counter() - start_time, 1)
+            elapsed_time = round(time.perf_counter() - start_time, 2)
 
             with data_lock:
                 arduino_vals = (
@@ -259,7 +259,7 @@ def csv_logger():
             usb_str = f"{usb_val:.3f}" if USE_USB_RES else "disabled"
 
             print(
-                f"t={elapsed_time:>4.1f} | "
+                f"t={elapsed_time:>4.2f} | "
                 f"enc={encoder_val:.4f} | "
                 f"A={arduino_str} | "
                 f"USB={usb_str}"

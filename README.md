@@ -39,3 +39,6 @@ time_sec,encoder,arduino_R1,arduino_R2,arduino_R3,usb_resistance
 0.100,0.136,12.4,45.5,78.8,nan
 0.200,0.139,12.5,45.4,78.7,nan
 ```
+
+# ADS1220 Reading Arduino Code
+See ADS1220 folder. Current version of code is multi-sensors ready, where user could specify `NUM_SENSORS`.
