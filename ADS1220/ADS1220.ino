@@ -14,6 +14,13 @@ ADS1220_WE ads(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
 #define MUX_S3 5
 
 #define NUM_SENSORS 2   // <-- USER SETS THIS (1–16)
+#define MA_WINDOW 20      // moving average window size
+
+
+float ma_buffer[NUM_SENSORS][MA_WINDOW];
+uint8_t ma_index = 0;
+bool ma_filled = false;
+
 
 
 /* Select MUX channel 0–15 */
@@ -38,6 +45,21 @@ float convertReadingtoResistance(float reading) {
   return abs(R_x - 1000);
 
 }
+
+
+float movingAverage(uint8_t ch, float new_value) {
+  ma_buffer[ch][ma_index] = new_value;
+
+  float sum = 0.0;
+  uint8_t count = ma_filled ? MA_WINDOW : (ma_index + 1);
+
+  for (uint8_t i = 0; i < count; i++) {
+    sum += ma_buffer[ch][i];
+  }
+
+  return sum / count;
+}
+
 
 /* ------------------- Setup ------------------- */
 void setup() {
@@ -80,29 +102,57 @@ void setup() {
 }
 
 /* ------------------- Main Loop ------------------- */
+//void loop() {
+//
+//  for (uint8_t i = 0; i < NUM_SENSORS; i++) {
+//
+//    /* ---------- Select MUX channel ---------- */
+//    selectMux(i);
+//    delay(25);   // allow MUX + ADC to settle
+//
+//    /* ---------- Read voltage ---------- */
+//    float mv = ads.getVoltage_mV();
+//
+//    /* ---------- Convert to resistance ---------- */
+//    float R = convertReadingtoResistance(mv);
+//
+//    /* ---------- Serial output ---------- */
+//    Serial.print(R, 5);
+//
+//    if (i < NUM_SENSORS - 1) {
+//      Serial.print(",");   // comma between values
+//    }
+//  }
+//
+//  Serial.println();   // end of line
+//
+//}
 void loop() {
 
   for (uint8_t i = 0; i < NUM_SENSORS; i++) {
 
-    /* ---------- Select MUX channel ---------- */
     selectMux(i);
-    delay(25);   // allow MUX + ADC to settle
+    delay(50);
 
-    /* ---------- Read voltage ---------- */
     float mv = ads.getVoltage_mV();
+    float R  = convertReadingtoResistance(mv);
 
-    /* ---------- Convert to resistance ---------- */
-    float R = convertReadingtoResistance(mv);
+    /* ---------- Apply moving average ---------- */
+    float R_filt = movingAverage(i, R);
 
-    /* ---------- Serial output ---------- */
-    Serial.print(R, 5);
+    Serial.print(R_filt, 5);
 
     if (i < NUM_SENSORS - 1) {
-      Serial.print(",");   // comma between values
+      Serial.print(",");
     }
   }
 
-  Serial.println();   // end of line
+  Serial.println();
 
+  /* ---------- Update MA index ---------- */
+  ma_index++;
+  if (ma_index >= MA_WINDOW) {
+    ma_index = 0;
+    ma_filled = true;
+  }
 }
-

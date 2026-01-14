@@ -41,7 +41,7 @@ N_ARDUINO = args.arduino_sensors
 
 # CSV_FILENAME = args.filename
 CSV_FILENAME = os.path.join('data', args.filename)
-LOG_RATE_HZ = 100
+LOG_RATE_HZ = 10
 
 # ============================================================
 # SERIAL CONFIGURATION
