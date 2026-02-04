@@ -14,12 +14,17 @@ ADS1220_WE ads(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
 #define MUX_S3 5
 
 #define NUM_SENSORS 2   // <-- USER SETS THIS (1–16)
-#define MA_WINDOW 20      // moving average window size
+#define MA_WINDOW 100      // moving average window size
+#define EMA_ALPHA    0.1   // 0 < alpha <= 1
 
 
 float ma_buffer[NUM_SENSORS][MA_WINDOW];
 uint8_t ma_index = 0;
 bool ma_filled = false;
+
+float ema_state[NUM_SENSORS];
+bool ema_initialized = false;
+
 
 
 
@@ -60,6 +65,16 @@ float movingAverage(uint8_t ch, float new_value) {
   return sum / count;
 }
 
+float emaFilter(uint8_t ch, float x) {
+  if (!ema_initialized) {
+    ema_state[ch] = x;   // initialize without jump
+    return x;
+  }
+
+  ema_state[ch] = EMA_ALPHA * x + (1.0 - EMA_ALPHA) * ema_state[ch];
+  return ema_state[ch];
+}
+
 
 /* ------------------- Setup ------------------- */
 void setup() {
@@ -94,40 +109,45 @@ void setup() {
 
   Serial.println("ADS1220 initialized.");
 
-  delay(1000);
+  delay(500);
   
-  // selectMux(0);
-  // delay(100);
-  
+//   selectMux(0);
+//   delay(100);
+//  
 }
 
 /* ------------------- Main Loop ------------------- */
-//void loop() {
+//void loop() { // Moving Average
 //
 //  for (uint8_t i = 0; i < NUM_SENSORS; i++) {
 //
-//    /* ---------- Select MUX channel ---------- */
 //    selectMux(i);
-//    delay(25);   // allow MUX + ADC to settle
+//    delay(50);
 //
-//    /* ---------- Read voltage ---------- */
 //    float mv = ads.getVoltage_mV();
+//    float R  = convertReadingtoResistance(mv);
 //
-//    /* ---------- Convert to resistance ---------- */
-//    float R = convertReadingtoResistance(mv);
+//    /* ---------- Apply moving average ---------- */
+//    float R_filt = movingAverage(i, R);
 //
-//    /* ---------- Serial output ---------- */
-//    Serial.print(R, 5);
+//    Serial.print(R_filt, 7);
 //
 //    if (i < NUM_SENSORS - 1) {
-//      Serial.print(",");   // comma between values
+//      Serial.print(",");
 //    }
 //  }
 //
-//  Serial.println();   // end of line
+//  Serial.println();
 //
+//  /* ---------- Update MA index ---------- */
+//  ma_index++;
+//  if (ma_index >= MA_WINDOW) {
+//    ma_index = 0;
+//    ma_filled = true;
+//  }
 //}
-void loop() {
+
+void loop() {  // Exponential Moving Average (LPF)
 
   for (uint8_t i = 0; i < NUM_SENSORS; i++) {
 
@@ -137,22 +157,13 @@ void loop() {
     float mv = ads.getVoltage_mV();
     float R  = convertReadingtoResistance(mv);
 
-    /* ---------- Apply moving average ---------- */
-    float R_filt = movingAverage(i, R);
+    float R_filt = emaFilter(i, R);
 
     Serial.print(R_filt, 5);
-
-    if (i < NUM_SENSORS - 1) {
-      Serial.print(",");
-    }
+    if (i < NUM_SENSORS - 1) Serial.print(",");
   }
 
   Serial.println();
 
-  /* ---------- Update MA index ---------- */
-  ma_index++;
-  if (ma_index >= MA_WINDOW) {
-    ma_index = 0;
-    ma_filled = true;
-  }
+  ema_initialized = true;
 }
