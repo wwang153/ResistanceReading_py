@@ -56,6 +56,9 @@ ARDUINO_RES_BAUD = 115200
 USB_RES_PORT = "/dev/ttyACM2"
 USB_RES_BAUD = 9600
 
+ARDUINO_RES_PORT2 = "/dev/ttyACM3"
+ARDUINO_RES_BAUD2 = 115200
+
 # ============================================================
 # RESISTANCE METER CLASS (UNCHANGED)
 # ============================================================
