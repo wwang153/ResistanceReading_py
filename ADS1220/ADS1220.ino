@@ -15,7 +15,7 @@ ADS1220_WE ads(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
 
 #define NUM_SENSORS 2   // <-- USER SETS THIS (1–16)
 #define MA_WINDOW 100      // moving average window size
-#define EMA_ALPHA    0.1   // 0 < alpha <= 1
+#define EMA_ALPHA    0.05   // 0 < alpha <= 1
 #define MEDIAN_WIN   3
 
 

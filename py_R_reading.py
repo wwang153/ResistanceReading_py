@@ -22,14 +22,14 @@ parser.add_argument(
 args = parser.parse_args()
 
 CSV_FILENAME = os.path.join("data", args.filename)
-LOG_RATE_HZ = 10
+LOG_RATE_HZ = 100
 
 # ============================================================
 # SERIAL CONFIGURATION
 # ============================================================
 
-ARDUINO_1_PORT = "/dev/ttyACM0"
-ARDUINO_2_PORT = "/dev/ttyACM1"
+ARDUINO_1_PORT = "/dev/ttyUSB0"
+ARDUINO_2_PORT = "/dev/ttyUSB1"
 ARDUINO_BAUD = 115200
 
 # ============================================================
