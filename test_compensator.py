@@ -1,6 +1,6 @@
 import csv
-import time
 import math
+import time
 from ViscoelasticCompensator import Compensator
 
 
@@ -8,14 +8,16 @@ from ViscoelasticCompensator import Compensator
 # USER SETTINGS
 # ===============================
 
-CSV_FILE = "your_creep_file.csv"
-DATA_RATE = 100  # Hz
+CSV_FILE = "data/HeatShrink_2mmTopMold_SingleCycle.csv"
+OUTPUT_FILE = "data/HeatShrink_2mmTopMold_SingleCycle_filtered.csv"
 
-# your model parameters
+DATA_RATE = 100
+
 p0 = 0.073761781995436
 p1 = 3.452818489875698
 q0 = 0.052643248351074
 q1 = 3.464251491171303
+
 
 # ===============================
 # Create compensator
@@ -30,26 +32,41 @@ comp = Compensator(
     data_rate=DATA_RATE
 )
 
+
 # ===============================
-# Replay CSV as real-time stream
+# Process CSV (scalar R and t)
 # ===============================
 
-with open(CSV_FILE, newline="") as f:
-    reader = csv.DictReader(f)
+with open(CSV_FILE, newline="") as infile, \
+     open(OUTPUT_FILE, "w", newline="") as outfile:
 
-    print("\n===== STARTING REPLAY =====\n")
+    reader = csv.DictReader(infile)
+    fieldnames = reader.fieldnames + ["filtered_f1"]
+    writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+
+    writer.writeheader()
 
     for row in reader:
 
+        # ---- scalar resistance ----
         try:
             R = float(row["arduino_f1"])
         except:
             R = math.nan
 
-        compensated = comp.update(R)
+        # ---- scalar time ----
+        try:
+            t_file = float(row["time_sec"])
+        except:
+            t_file = None
 
-        print(f"Raw: {R:.6f}  |  Compensated: {compensated:.6f}")
+        # ---- single-value update ----
+        filtered = comp.update(R, t=t_file)
+        print("Compensation Done: ")
+        print(f"t={t_file:.3f}, R={R:.3f}, filtered={filtered:.3f}")
 
-        time.sleep(1.0 / DATA_RATE)
+        row["filtered_f1"] = filtered
+        time.sleep(0.0001)
+        writer.writerow(row)
 
-print("\n===== REPLAY FINISHED =====")
+print("Filtering complete.")
