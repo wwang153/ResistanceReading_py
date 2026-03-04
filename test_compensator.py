@@ -11,7 +11,7 @@ from ViscoelasticCompensator import Compensator
 CSV_FILE = "data/HeatShrink_2mmTopMold_SingleCycle.csv"
 OUTPUT_FILE = "data/HeatShrink_2mmTopMold_SingleCycle_filtered.csv"
 
-DATA_RATE = 100
+DATA_RATE = 100 # Hz
 
 p0 = 0.073761781995436
 p1 = 3.452818489875698

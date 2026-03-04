@@ -6,6 +6,31 @@ import os
 import argparse
 import tkinter.messagebox
 import math
+from ViscoelasticCompensator import Compensator
+
+# ===============================
+# COMPENSATOR PARAMETERS
+# ===============================
+
+DATA_RATE = 100
+
+s1_p0 = 0.073761781995436
+s1_p1 = 3.452818489875698
+s1_q0 = 0.052643248351074
+s1_q1 = 3.464251491171303
+
+# ===============================
+# Create compensator
+# ===============================
+
+comp = Compensator(
+    mode="creep",
+    p0=s1_p0,
+    p1=s1_p1,
+    q0=s1_q0,
+    q1=s1_q1,
+    data_rate=DATA_RATE
+)
 
 # ============================================================
 # ARGUMENT PARSING
@@ -32,16 +57,23 @@ parser.add_argument(
     help="Number of resistance sensors connected to Arduino (default: 1)"
 )
 
+parser.add_argument(
+    "--use_comp",
+    action="store_true",
+    help="Enable viscoelastic compensator (default: disabled)"
+)
+
 args = parser.parse_args()
 
 USE_ARDUINO_RES = args.res == "arduino"
 USE_USB_RES = args.res == "usb"
+USE_COMP = args.use_comp
 
 N_ARDUINO = args.arduino_sensors
 
 # CSV_FILENAME = args.filename
 CSV_FILENAME = os.path.join('data', args.filename)
-LOG_RATE_HZ = 100
+
 
 # ============================================================
 # SERIAL CONFIGURATION
@@ -225,7 +257,7 @@ def csv_logger():
         print("===================================================\n")
 
         while True:
-            time.sleep(1.0 / LOG_RATE_HZ)
+            time.sleep(1.0 / DATA_RATE)
 
             # --- time with 0.1 s accuracy ---
             elapsed_time = round(time.perf_counter() - start_time, 2)
