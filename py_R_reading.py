@@ -14,23 +14,33 @@ from ViscoelasticCompensator import Compensator
 
 DATA_RATE = 100
 
-s1_p0 = 0.073761781995436
-s1_p1 = 3.452818489875698
-s1_q0 = 0.052643248351074
-s1_q1 = 3.464251491171303
-
 # ===============================
-# Create compensator
+# COMPENSATOR PARAMETERS
 # ===============================
 
-comp = Compensator(
-    mode="creep",
-    p0=s1_p0,
-    p1=s1_p1,
-    q0=s1_q0,
-    q1=s1_q1,
-    data_rate=DATA_RATE
-)
+DATA_RATE = 100
+
+sensor_params = {
+    1: {
+        "p0": 0.073761781995436,
+        "p1": 3.452818489875698,
+        "q0": 0.052643248351074,
+        "q1": 3.464251491171303
+    },
+    2: {
+        "p0": 0.05,
+        "p1": 3.1,
+        "q0": 0.04,
+        "q1": 3.2
+    },
+    # add more sensors here if needed
+    3: {
+        "p0": 0.05,
+        "p1": 3.1,
+        "q0": 0.04,
+        "q1": 3.2
+    },
+}
 
 # ============================================================
 # ARGUMENT PARSING
@@ -38,10 +48,7 @@ comp = Compensator(
 
 parser = argparse.ArgumentParser(description="Record encoder and resistance data")
 
-parser.add_argument(
-    "filename",
-    help="Output CSV filename"
-)
+parser.add_argument("filename", help="Output CSV filename")
 
 parser.add_argument(
     "--res",
@@ -68,12 +75,38 @@ args = parser.parse_args()
 USE_ARDUINO_RES = args.res == "arduino"
 USE_USB_RES = args.res == "usb"
 USE_COMP = args.use_comp
-
 N_ARDUINO = args.arduino_sensors
 
-# CSV_FILENAME = args.filename
 CSV_FILENAME = os.path.join('data', args.filename)
 
+# ===============================
+# Create compensators (one per sensor)
+# ===============================
+
+if USE_COMP and USE_ARDUINO_RES:
+
+    compensators = []
+
+    for i in range(1, N_ARDUINO + 1):
+
+        if i not in sensor_params:
+            raise ValueError(f"No parameters defined for sensor {i}")
+
+        params = sensor_params[i]
+
+        comp = Compensator(
+            mode="creep",
+            p0=params["p0"],
+            p1=params["p1"],
+            q0=params["q0"],
+            q1=params["q1"],
+            data_rate=DATA_RATE
+        )
+
+        compensators.append(comp)
+
+else:
+    compensators = None
 
 # ============================================================
 # SERIAL CONFIGURATION
@@ -89,7 +122,7 @@ USB_RES_PORT = "/dev/ttyACM2"
 USB_RES_BAUD = 9600
 
 # ============================================================
-# RESISTANCE METER CLASS (UNCHANGED)
+# RESISTANCE METER CLASS
 # ============================================================
 
 class Usb_rs:
@@ -164,7 +197,7 @@ def read_usb_resistance():
         return None
 
 # ============================================================
-# SHARED DATA (THREAD SAFE)
+# SHARED DATA
 # ============================================================
 
 latest_encoder = math.nan
@@ -174,7 +207,7 @@ latest_arduino_resistance = [math.nan] * N_ARDUINO
 data_lock = threading.Lock()
 
 # ============================================================
-# THREAD: ENCODER
+# THREADS
 # ============================================================
 
 def encoder_thread():
@@ -191,10 +224,6 @@ def encoder_thread():
                     latest_encoder = float(line.strip())
             except:
                 pass
-
-# ============================================================
-# THREAD: ARDUINO RESISTANCE (R1,R2,R3,...)
-# ============================================================
 
 def arduino_resistance_thread():
     global latest_arduino_resistance
@@ -217,10 +246,6 @@ def arduino_resistance_thread():
             except:
                 pass
 
-# ============================================================
-# THREAD: USB RESISTANCE
-# ============================================================
-
 def usb_resistance_thread():
     global latest_usb_resistance
     while True:
@@ -231,13 +256,12 @@ def usb_resistance_thread():
         time.sleep(0.1)
 
 # ============================================================
-# CSV LOGGER (TIME STARTS AT 0)
+# CSV LOGGER
 # ============================================================
 
 def csv_logger():
     file_exists = os.path.isfile(CSV_FILENAME)
-
-    start_time = time.perf_counter()  # t = 0 reference
+    start_time = time.perf_counter()
 
     with open(CSV_FILENAME, "a", newline="") as f:
         writer = csv.writer(f)
@@ -247,19 +271,20 @@ def csv_logger():
             for i in range(N_ARDUINO):
                 header.append(f"arduino_f{i+1}")
             header.append("usb_resistance")
+
+            if USE_COMP and USE_ARDUINO_RES:
+                for i in range(N_ARDUINO):
+                    header.append(f"filtered_f{i+1}")
+
             writer.writerow(header)
 
         print("\n================= LOGGING STARTED =================")
         print(f"File: {CSV_FILENAME}")
-        print(f"Resistance mode: {args.res}")
-        print(f"Arduino sensors: {N_ARDUINO}")
-        print("Time resolution: 0.1 s")
+        print(f"Use compensator: {USE_COMP}")
         print("===================================================\n")
 
         while True:
             time.sleep(1.0 / DATA_RATE)
-
-            # --- time with 0.1 s accuracy ---
             elapsed_time = round(time.perf_counter() - start_time, 2)
 
             with data_lock:
@@ -267,34 +292,46 @@ def csv_logger():
                     latest_arduino_resistance if USE_ARDUINO_RES
                     else [math.nan] * N_ARDUINO
                 )
-
                 usb_val = latest_usb_resistance if USE_USB_RES else math.nan
                 encoder_val = latest_encoder
 
-                row = [
-                    elapsed_time,
-                    encoder_val,
-                    *arduino_vals,
-                    usb_val
-                ]
+            row = [elapsed_time, encoder_val, *arduino_vals, usb_val]
 
-            # --- write CSV ---
+            # ---- Apply compensator ----
+            if USE_COMP and USE_ARDUINO_RES:
+                filtered_vals = []
+                for i in range(N_ARDUINO):
+                    R = arduino_vals[i]
+                    filtered = compensators[i].update(R, t=elapsed_time)
+                    filtered_vals.append(filtered)
+
+                row.extend(filtered_vals)
+            else:
+                filtered_vals = []
+
             writer.writerow(row)
             f.flush()
 
-            # --- terminal output ---
             arduino_str = (
                 "[" + ", ".join(f"{v:.3f}" for v in arduino_vals) + "]"
-                if USE_ARDUINO_RES else "disabled"
+                if USE_ARDUINO_RES else "N/A"
             )
 
-            usb_str = f"{usb_val:.3f}" if USE_USB_RES else "disabled"
+            usb_str = (
+                f"{usb_val:.3f}" if USE_USB_RES else "N/A"
+            )
+
+            filtered_str = (
+                "[" + ", ".join(f"{v:.3f}" for v in filtered_vals) + "]"
+                if (USE_COMP and USE_ARDUINO_RES) else "N/A"
+            )
 
             print(
-                f"t={elapsed_time:>4.2f} | "
+                f"t={elapsed_time:>5.2f} | "
                 f"enc={encoder_val:.4f} | "
-                f"A={arduino_str} | "
-                f"USB={usb_str}"
+                f"USB={usb_str} | "
+                f"Ard={arduino_str} | "
+                f"Fil={filtered_str}"
             )
 
 # ============================================================

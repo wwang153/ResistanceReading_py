@@ -24,7 +24,7 @@ class Compensator:
 
         # baseline averaging
         self.R0_buffer = []
-        self.R0_sample_count = 1
+        self.R0_sample_count = 500
 
     # --------------------------------------------------
     # MATLAB-style G(t)
