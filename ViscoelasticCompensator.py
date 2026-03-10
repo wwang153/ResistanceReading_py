@@ -4,9 +4,10 @@ import math
 
 class Compensator:
 
-    def __init__(self, mode, p0, p1, q0, q1, data_rate):
+    def __init__(self, mode, p0, p1, q0, q1, data_rate, pm='+'):
 
         self.mode = mode.strip().lower()
+        self.pm = pm
 
         self.p0 = p0
         self.p1 = p1
@@ -69,7 +70,10 @@ class Compensator:
         if self.R0 is None:
             self.R0 = sum(self.R0_buffer) / len(self.R0_buffer)
 
-        dR = R_measured - self.R0
+        if self.pm == '+':
+            dR = R_measured - self.R0
+        else:
+            dR = -R_measured + self.R0
 
         # --------------------------------------------
         # First iteration (S1)
