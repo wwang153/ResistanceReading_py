@@ -8,6 +8,18 @@ import tkinter.messagebox
 import math
 from ViscoelasticCompensator import Compensator
 
+import socket # Ensure this is at the top with other imports
+
+# ============================================================
+# UDP CONFIGURATION (Laptop B - Ubuntu)
+# ============================================================
+UDP_IP = "0.0.0.0"  # Listen on all available network interfaces
+UDP_PORT = 5005     # Must match the port used on Laptop A (Mac)
+
+# Add to SHARED DATA section
+latest_cable_lengths = [math.nan, math.nan, math.nan]
+latest_t_diff = math.nan
+
 # ===============================
 # COMPENSATOR PARAMETERS
 # ===============================
@@ -260,6 +272,36 @@ def usb_resistance_thread():
                 latest_usb_resistance = value
         time.sleep(0.1)
 
+def udp_cable_thread():
+    global latest_cable_lengths, latest_t_diff
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    # Increase buffer size to prevent lag if data builds up
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1) 
+    sock.bind((UDP_IP, UDP_PORT))
+    
+    print(f"UDP Listener started on port {UDP_PORT}...")
+    
+    while True:
+        try:
+            # Receive data
+            data, addr = sock.recvfrom(1024)
+            t_arrival = time.time()
+            
+            # Expecting: [t_mac, l1, l2, l3]
+            parts = data.decode().split(',')
+            
+            if len(parts) >= 4:
+                t_mac = float(parts[0]) # Now index 0
+                lengths = [float(x) for x in parts[1:4]] # Now indices 1, 2, 3
+                
+                with data_lock:
+                    latest_cable_lengths = lengths
+                    latest_t_diff = t_arrival - t_mac
+        except Exception as e:
+            # Using pass to keep the terminal clean, or print for debugging
+            pass
+
 # ============================================================
 # CSV LOGGER
 # ============================================================
@@ -271,12 +313,24 @@ def csv_logger():
     with open(CSV_FILENAME, "a", newline="") as f:
         writer = csv.writer(f)
 
+        # ============================================================
+        # 1. HEADER GENERATION
+        # ============================================================
         if not file_exists:
+            # Base headers
             header = ["time_sec", "encoder"]
+            
+            # Arduino Resistance headers
             for i in range(N_ARDUINO):
                 header.append(f"arduino_f{i+1}")
+            
+            # USB Resistance header
             header.append("usb_resistance")
 
+            # NEW: Cable length and Latency headers
+            header.extend(["l1", "l2", "l3", "t_diff"])
+
+            # Compensator headers (if enabled)
             if USE_COMP and USE_ARDUINO_RES:
                 for i in range(N_ARDUINO):
                     header.append(f"filtered_f{i+1}")
@@ -286,59 +340,73 @@ def csv_logger():
         print("\n================= LOGGING STARTED =================")
         print(f"File: {CSV_FILENAME}")
         print(f"Use compensator: {USE_COMP}")
+        print(f"UDP Target: {UDP_IP}:{UDP_PORT}")
         print("===================================================\n")
 
+        # ============================================================
+        # 2. DATA COLLECTION LOOP
+        # ============================================================
         while True:
+            # Maintain the loop at the specified DATA_RATE (e.g., 100Hz)
             time.sleep(1.0 / DATA_RATE)
             elapsed_time = round(time.perf_counter() - start_time, 2)
 
             with data_lock:
+                # Capture current snapshots of all shared variables
                 arduino_vals = (
                     latest_arduino_resistance if USE_ARDUINO_RES
                     else [math.nan] * N_ARDUINO
                 )
                 usb_val = latest_usb_resistance if USE_USB_RES else math.nan
                 encoder_val = latest_encoder
+                
+                # Capture current cable data from UDP thread
+                cable_vals = latest_cable_lengths  # [l1, l2, l3]
+                t_diff = latest_t_diff             # Latency calculation
 
-            row = [elapsed_time, encoder_val, *arduino_vals, usb_val]
+            # Construct the row: [Time, Encoder, Arduinos..., USB, L1, L2, L3, T_Diff]
+            row = [elapsed_time, encoder_val, *arduino_vals, usb_val, *cable_vals, t_diff]
 
-            # ---- Apply compensator ----
+            # ---- Apply Viscoelastic Compensator (if enabled) ----
+            filtered_vals = []
             if USE_COMP and USE_ARDUINO_RES:
-                filtered_vals = []
                 for i in range(N_ARDUINO):
                     R = arduino_vals[i]
+                    # Note: compensators list is 0-indexed
                     filtered = compensators[i].update(R, t=elapsed_time)
                     filtered_vals.append(filtered)
-
+                
+                # Append filtered values to the end of the CSV row
                 row.extend(filtered_vals)
-            else:
-                filtered_vals = []
 
+            # Write to file and force sync to disk
             writer.writerow(row)
             f.flush()
 
+            # ============================================================
+            # 3. TERMINAL FEEDBACK (MONITORING)
+            # ============================================================
             arduino_str = (
-                "[" + ", ".join(f"{v:.3f}" for v in arduino_vals) + "]"
+                "[" + ", ".join(f"{v:.2f}" for v in arduino_vals) + "]"
                 if USE_ARDUINO_RES else "N/A"
             )
 
-            usb_str = (
-                f"{usb_val:.3f}" if USE_USB_RES else "N/A"
+            cable_str = (
+                f"L:[{cable_vals[0]:.1f}, {cable_vals[1]:.1f}, {cable_vals[2]:.1f}]"
+                if not math.isnan(cable_vals[0]) else "L:[N/A]"
             )
 
-            filtered_str = (
-                "[" + ", ".join(f"{v:.3f}" for v in filtered_vals) + "]"
-                if (USE_COMP and USE_ARDUINO_RES) else "N/A"
-            )
+            latency_str = f"dt={t_diff:.4f}s" if not math.isnan(t_diff) else "dt=N/A"
 
+            # Print a condensed status line to the console
             print(
-                f"t={elapsed_time:>5.2f} | "
-                f"enc={encoder_val:.4f} | "
-                f"USB={usb_str} | "
-                f"Ard={arduino_str} | "
-                f"Fil={filtered_str}"
+                f"t={elapsed_time:>6.2f} | "
+                f"Enc:{encoder_val:.3f} | "
+                f"Ard:{arduino_str} | "
+                f"{cable_str} | "
+                f"{latency_str}"
             )
-
+            
 # ============================================================
 # MAIN
 # ============================================================
@@ -346,6 +414,8 @@ def csv_logger():
 if __name__ == "__main__":
 
     threading.Thread(target=encoder_thread, daemon=True).start()
+
+    threading.Thread(target=udp_cable_thread, daemon=True).start()
 
     if USE_ARDUINO_RES:
         threading.Thread(target=arduino_resistance_thread, daemon=True).start()
