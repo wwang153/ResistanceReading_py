@@ -13,9 +13,9 @@ ADS1220_WE ads(ADS1220_CS_PIN, ADS1220_DRDY_PIN);
 #define MUX_S2 4
 #define MUX_S3 5
 
-#define NUM_SENSORS 3   // <-- USER SETS THIS (1–16)
+#define NUM_SENSORS 6   // <-- USER SETS THIS (1–16)
 #define MA_WINDOW 100      // moving average window size
-#define EMA_ALPHA    0.05   // 0 < alpha <= 1
+#define EMA_ALPHA    0.3   // 0 < alpha <= 1
 #define MEDIAN_WIN   3
 
 
@@ -196,22 +196,35 @@ void setup() {
 //}
 
 void loop() {  // Exponential Moving Average (LPF)
+  unsigned long t0 = micros();
 
   for (uint8_t i = 0; i < NUM_SENSORS; i++) {
+    unsigned long s0 = micros();
 
     selectMux(i);
     delay(5);
 
     float mv = ads.getVoltage_mV();
+
+//    unsigned long s1 = micros();
+//    Serial.print(s1 - s0);
+//    Serial.print(",");
+    
     float R  = convertReadingtoResistance(mv);
 
     // ---- Median → EMA ----
     float R_med  = medianFilter(i, R);
     float R_filt = emaFilter(i, R_med);
+//    float R_filt = R_med;
 
     Serial.print(R_filt, 5);
     if (i < NUM_SENSORS - 1) Serial.print(",");
   }
 
   Serial.println();
+
+//  unsigned long t1 = micros();
+//
+//  Serial.print(",Loop=");
+//  Serial.println(t1 - t0);
 }
