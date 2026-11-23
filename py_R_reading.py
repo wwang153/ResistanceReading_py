@@ -117,13 +117,13 @@ else:
 # SERIAL CONFIGURATION
 # ============================================================
 
-ENCODER_PORT = "/dev/ttyACM1"
+ENCODER_PORT = "/dev/ttyACM2"
 ENCODER_BAUD = 9600
 
-ARDUINO_RES_PORT = "/dev/ttyACM2"
+ARDUINO_RES_PORT = "/dev/ttyACM0"
 ARDUINO_RES_BAUD = 115200
 
-USB_RES_PORT = "/dev/ttyACM2"
+USB_RES_PORT = "/dev/ttyACM0"
 USB_RES_BAUD = 9600
 
 # ============================================================
